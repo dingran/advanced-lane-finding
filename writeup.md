@@ -217,4 +217,69 @@ Here is a screenshot
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+The tips and tricks section in the lecture is very helpful. I implemented some of them. 
+
+For example, in processing the videos, I would first do a sanity check of the result from previous frame
+
+````python
+    # sanity check
+    left_sanity_check_pass = True
+    right_sanity_check_pass = True
+    if leftlane.detected:
+        # print(leftlane.line_base_pos)
+        if img.shape[0]*0.0 < leftlane.line_base_pos < img.shape[0]*.4:
+            left_sanity_check_pass = False
+    
+    if rightlane.detected:
+        if img.shape[0]*.6 < rightlane.line_base_pos < img.shape[0]:
+            right_sanity_check_pass = False    
+    
+    leftlane_use_existing_fit = False
+    if leftlane.detected and left_sanity_check_pass:
+        leftlane_use_existing_fit = True
+    
+    rightlane_use_existing_fit = False
+    if rightlane.detected and right_sanity_check_pass:
+        rightlane_use_existing_fit = True
+````
+
+If sanity check passes, the program would use the existing fit, which is the average of the last 5 fit results, the relevant code snippets are listed below:
+
+````python
+    if leftlane_use_existing_fit:
+        left_fit = leftlane.best_fit
+        left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin))) 
+    if rightlane_use_existing_fit:
+        right_fit = rightlane.best_fit
+        right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))  
+````
+
+and
+
+````python
+    # record fit in Line class
+    leftlane.detected = True
+    rightlane.detected = True
+    leftlane.current_fit = left_fit
+    rightlane.current_fit = right_fit
+    leftlane.last_N_fit.append(left_fit)
+    rightlane.last_N_fit.append(right_fit)
+    if len(leftlane.last_N_fit) > leftlane.keep_N_fit:
+        leftlane.last_N_fit.pop(0)
+    if len(rightlane.last_N_fit) > rightlane.keep_N_fit:
+        rightlane.last_N_fit.pop(0)
+    
+    leftlane.best_fit = np.mean(leftlane.last_N_fit, axis=0)
+    rightlane.best_fit = np.mean(rightlane.last_N_fit, axis=0)
+````
+
+I find the section of finding lane pixels is the most critical one, that's why I used 6 channels (5 with thresholding on color and gradients, 1 from Hough line detection) to help make the lane pixel detection more robust. 
+It worked well on the project_video.mp4, but still not very well on challenge_video.mp4 and especially on harder_challenge_video.mp4.
+ 
+If I were to spend more effort, I would like to investigate the following:
+* How to correct the image brightness and contrast better and more adaptively?
+* How to set the thresholds dynamically/adaptively?
+* Does it work better to project perspective to bird-eye view first before doing lane pixel detection?
+* Incorporate knowledge of physical dimensions to have a better initial guess and more strict sanity check of lane location and lane distance
+
+ 
